@@ -7,7 +7,7 @@ public class PurchaseOrderDto
     public Guid? Id { get; set; }
     public string? OrderNumber { get; set; }
 
-    [Required]
+    //[Required]
     [StringLength(100)]
     public string RequestedBy { get; set; } = string.Empty;
 
