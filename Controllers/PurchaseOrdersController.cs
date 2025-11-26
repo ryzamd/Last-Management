@@ -18,6 +18,7 @@ public class PurchaseOrdersController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? status = null)
     {
         var result = await _purchaseOrderService.GetAllAsync(page, pageSize, status);
@@ -25,6 +26,7 @@ public class PurchaseOrdersController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(Guid id)
     {
         var result = await _purchaseOrderService.GetByIdAsync(id);
@@ -35,10 +37,28 @@ public class PurchaseOrdersController : ControllerBase
     }
 
     [HttpPost]
+    [AllowAnonymous]
     public async Task<IActionResult> Create([FromBody] PurchaseOrderDto dto)
     {
-        var username = User.GetUsername();
-        var result = await _purchaseOrderService.CreateAsync(dto, username);
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        string requestorName;
+
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            requestorName = User.GetUsername();
+            dto.RequestedBy = requestorName;
+        }
+        else
+        {
+            requestorName = dto.RequestedBy;
+        }
+
+        if (string.IsNullOrWhiteSpace(requestorName))
+            return BadRequest(new { message = "RequestedBy name is required for guest users." });
+
+        var result = await _purchaseOrderService.CreateAsync(dto, requestorName);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 

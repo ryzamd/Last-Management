@@ -7,15 +7,15 @@ public class PurchaseOrderDto
     public Guid? Id { get; set; }
     public string? OrderNumber { get; set; }
 
-    //[Required]
+    [Required(ErrorMessage = "Requester name is required")]
     [StringLength(100)]
     public string RequestedBy { get; set; } = string.Empty;
 
-    [Required]
+    [Required(ErrorMessage = "Department is required")]
     [StringLength(100)]
     public string Department { get; set; } = string.Empty;
 
-    [Required]
+    [Required(ErrorMessage = "Target Location is required")]
     public Guid LocationId { get; set; }
 
     public string Status { get; set; } = "Pending";
