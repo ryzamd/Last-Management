@@ -1,4 +1,5 @@
 using LastManagement.Extensions;
+using LastManagement.Middleware;
 
 namespace LastManagement;
 
@@ -36,6 +37,8 @@ public class Program
         builder.Services.AddApplicationServices();
 
         var app = builder.Build();
+
+        app.UseMiddleware<ExceptionHandlingMiddleware>();
 
         if (app.Environment.IsDevelopment())
         {

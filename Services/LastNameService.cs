@@ -73,6 +73,14 @@ public class LastNameService : ILastNameService
 
     public async Task<LastNameDto> CreateAsync(LastNameDto dto)
     {
+        var exists = await _context.LastNamesRepository.AnyAsync(l => l.LastCode == dto.LastCode);
+        if (exists)
+            throw new InvalidOperationException($"Last with code '{dto.LastCode}' already exists");
+
+        var customerExists = await _context.CustomersRepository.AnyAsync(c => c.Id == dto.CustomerId);
+        if (!customerExists)
+            throw new ArgumentException($"Customer with ID '{dto.CustomerId}' not found");
+
         var last = new LastName
         {
             Id = Guid.NewGuid(),
@@ -106,6 +114,14 @@ public class LastNameService : ILastNameService
         if (last == null)
             return null;
 
+        var exists = await _context.LastNamesRepository.AnyAsync(l => l.LastCode == dto.LastCode && l.Id != id);
+        if (exists)
+            throw new InvalidOperationException($"Last with code '{dto.LastCode}' already exists");
+
+        var customerExists = await _context.CustomersRepository.AnyAsync(c => c.Id == dto.CustomerId);
+        if (!customerExists)
+            throw new ArgumentException($"Customer with ID '{dto.CustomerId}' not found");
+
         last.LastCode = dto.LastCode;
         last.LastType = dto.LastType;
         last.Article = dto.Article;
@@ -132,6 +148,14 @@ public class LastNameService : ILastNameService
         var last = await _context.LastNamesRepository.FindAsync(id);
         if (last == null)
             return false;
+
+        var hasStocks = await _context.InventoryStocksRepository.AnyAsync(i => i.LastNameId == id);
+        if (hasStocks)
+            throw new InvalidOperationException("Cannot delete last name with existing inventory stocks");
+
+        var hasPurchaseOrderItems = await _context.PurchaseOrderItemsRepository.AnyAsync(p => p.LastNameId == id);
+        if (hasPurchaseOrderItems)
+            throw new InvalidOperationException("Cannot delete last name with existing purchase order items");
 
         _context.LastNamesRepository.Remove(last);
         await _context.SaveChangesAsync();

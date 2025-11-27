@@ -65,6 +65,10 @@ public class CustomerService : ICustomerService
 
     public async Task<CustomerDto> CreateAsync(CustomerDto dto)
     {
+        var exists = await _context.CustomersRepository.AnyAsync(c => c.CustomerName == dto.CustomerName);
+        if (exists)
+            throw new InvalidOperationException($"Customer with name '{dto.CustomerName}' already exists");
+
         var customer = new Customer
         {
             Id = Guid.NewGuid(),
@@ -87,6 +91,10 @@ public class CustomerService : ICustomerService
         if (customer == null)
             return null;
 
+        var exists = await _context.CustomersRepository.AnyAsync(c => c.CustomerName == dto.CustomerName && c.Id != id);
+        if (exists)
+            throw new InvalidOperationException($"Customer with name '{dto.CustomerName}' already exists");
+
         customer.CustomerName = dto.CustomerName;
         customer.Status = dto.Status;
 
@@ -103,6 +111,10 @@ public class CustomerService : ICustomerService
         var customer = await _context.CustomersRepository.FindAsync(id);
         if (customer == null)
             return false;
+
+        var hasLastNames = await _context.LastNamesRepository.AnyAsync(l => l.CustomerId == id);
+        if (hasLastNames)
+            throw new InvalidOperationException("Cannot delete customer with existing last names");
 
         _context.CustomersRepository.Remove(customer);
         await _context.SaveChangesAsync();

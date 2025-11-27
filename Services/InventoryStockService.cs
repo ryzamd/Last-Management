@@ -85,40 +85,64 @@ public class InventoryStockService : IInventoryStockService
 
     public async Task<InventoryStockDto> CreateOrUpdateAsync(InventoryStockDto dto)
     {
-        var existing = await _context.InventoryStocksRepository
-            .FirstOrDefaultAsync(i => i.LastNameId == dto.LastNameId
-                && i.LastSizeId == dto.LastSizeId
-                && i.LocationId == dto.LocationId);
+        var lastNameExists = await _context.LastNamesRepository.AnyAsync(l => l.Id == dto.LastNameId);
+        if (!lastNameExists)
+            throw new ArgumentException($"LastName with ID '{dto.LastNameId}' not found");
 
-        if (existing != null)
+        var lastSizeExists = await _context.LastSizesRepository.AnyAsync(s => s.Id == dto.LastSizeId);
+        if (!lastSizeExists)
+            throw new ArgumentException($"LastSize with ID '{dto.LastSizeId}' not found");
+
+        var locationExists = await _context.LocationsRepository.AnyAsync(l => l.Id == dto.LocationId);
+        if (!locationExists)
+            throw new ArgumentException($"Location with ID '{dto.LocationId}' not found");
+
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            existing.QuantityGood = dto.QuantityGood;
-            existing.QuantityDamaged = dto.QuantityDamaged;
-            existing.QuantityReserved = dto.QuantityReserved;
-            await _context.SaveChangesAsync();
+            var existing = await _context.InventoryStocksRepository
+                .FirstOrDefaultAsync(i => i.LastNameId == dto.LastNameId
+                    && i.LastSizeId == dto.LastSizeId
+                    && i.LocationId == dto.LocationId);
 
-            dto.Id = existing.Id;
-            dto.CreatedAt = existing.CreatedAt;
+            if (existing != null)
+            {
+                existing.QuantityGood = dto.QuantityGood;
+                existing.QuantityDamaged = dto.QuantityDamaged;
+                existing.QuantityReserved = dto.QuantityReserved;
+                await _context.SaveChangesAsync();
+
+                dto.Id = existing.Id;
+                dto.CreatedAt = existing.CreatedAt;
+            }
+            else
+            {
+                var stock = new InventoryStock
+                {
+                    Id = Guid.NewGuid(),
+                    LastNameId = dto.LastNameId,
+                    LastSizeId = dto.LastSizeId,
+                    LocationId = dto.LocationId,
+                    QuantityGood = dto.QuantityGood,
+                    QuantityDamaged = dto.QuantityDamaged,
+                    QuantityReserved = dto.QuantityReserved
+                };
+
+                _context.InventoryStocksRepository.Add(stock);
+                await _context.SaveChangesAsync();
+
+                dto.Id = stock.Id;
+                dto.CreatedAt = stock.CreatedAt;
+            }
+
+            await transaction.CommitAsync();
             return dto;
         }
-
-        var stock = new InventoryStock
+        catch
         {
-            Id = Guid.NewGuid(),
-            LastNameId = dto.LastNameId,
-            LastSizeId = dto.LastSizeId,
-            LocationId = dto.LocationId,
-            QuantityGood = dto.QuantityGood,
-            QuantityDamaged = dto.QuantityDamaged,
-            QuantityReserved = dto.QuantityReserved
-        };
-
-        _context.InventoryStocksRepository.Add(stock);
-        await _context.SaveChangesAsync();
-
-        dto.Id = stock.Id;
-        dto.CreatedAt = stock.CreatedAt;
-        return dto;
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<bool> AdjustStockAsync(Guid stockId, int quantityChange, string movementType, string reason, string createdBy)
@@ -130,7 +154,11 @@ public class InventoryStockService : IInventoryStockService
             if (stock == null)
                 return false;
 
-            stock.QuantityGood += quantityChange;
+            var newQuantity = stock.QuantityGood + quantityChange;
+            if (newQuantity < 0)
+                throw new InvalidOperationException("Insufficient stock for adjustment");
+
+            stock.QuantityGood = newQuantity;
 
             var movement = new StockMovement
             {

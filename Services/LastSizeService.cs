@@ -50,6 +50,17 @@ public class LastSizeService : ILastSizeService
 
     public async Task<LastSizeDto> CreateAsync(LastSizeDto dto)
     {
+        var exists = await _context.LastSizesRepository.AnyAsync(s => s.SizeValue == dto.SizeValue);
+        if (exists)
+            throw new InvalidOperationException($"Size with value '{dto.SizeValue}' already exists");
+
+        if (dto.ReplacementSizeId.HasValue)
+        {
+            var replacementExists = await _context.LastSizesRepository.AnyAsync(s => s.Id == dto.ReplacementSizeId.Value);
+            if (!replacementExists)
+                throw new ArgumentException($"Replacement size with ID '{dto.ReplacementSizeId}' not found");
+        }
+
         var size = new LastSize
         {
             Id = Guid.NewGuid(),
@@ -73,6 +84,17 @@ public class LastSizeService : ILastSizeService
         if (size == null)
             return null;
 
+        var exists = await _context.LastSizesRepository.AnyAsync(s => s.SizeValue == dto.SizeValue && s.Id != id);
+        if (exists)
+            throw new InvalidOperationException($"Size with value '{dto.SizeValue}' already exists");
+
+        if (dto.ReplacementSizeId.HasValue)
+        {
+            var replacementExists = await _context.LastSizesRepository.AnyAsync(s => s.Id == dto.ReplacementSizeId.Value);
+            if (!replacementExists)
+                throw new ArgumentException($"Replacement size with ID '{dto.ReplacementSizeId}' not found");
+        }
+
         size.SizeValue = dto.SizeValue;
         size.SizeLabel = dto.SizeLabel;
         size.Status = dto.Status;
@@ -90,6 +112,18 @@ public class LastSizeService : ILastSizeService
         var size = await _context.LastSizesRepository.FindAsync(id);
         if (size == null)
             return false;
+
+        var hasStocks = await _context.InventoryStocksRepository.AnyAsync(i => i.LastSizeId == id);
+        if (hasStocks)
+            throw new InvalidOperationException("Cannot delete size with existing inventory stocks");
+
+        var hasPurchaseOrderItems = await _context.PurchaseOrderItemsRepository.AnyAsync(p => p.LastSizeId == id);
+        if (hasPurchaseOrderItems)
+            throw new InvalidOperationException("Cannot delete size with existing purchase order items");
+
+        var isReplacementSize = await _context.LastSizesRepository.AnyAsync(s => s.ReplacementSizeId == id);
+        if (isReplacementSize)
+            throw new InvalidOperationException("Cannot delete size that is used as replacement for other sizes");
 
         _context.LastSizesRepository.Remove(size);
         await _context.SaveChangesAsync();

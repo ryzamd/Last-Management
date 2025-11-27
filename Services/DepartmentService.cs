@@ -47,6 +47,10 @@ public class DepartmentService : IDepartmentService
 
     public async Task<DepartmentDto> CreateAsync(DepartmentDto dto)
     {
+        var exists = await _context.DepartmentsRepository.AnyAsync(d => d.DepartmentName == dto.DepartmentName);
+        if (exists)
+            throw new InvalidOperationException($"Department with name '{dto.DepartmentName}' already exists");
+
         var dept = new Department
         {
             Id = Guid.NewGuid(),

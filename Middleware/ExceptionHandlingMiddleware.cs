@@ -1,4 +1,6 @@
 ﻿using LastManagement.Constants;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using System.Net;
 using System.Text.Json;
 
@@ -37,6 +39,7 @@ public class ExceptionHandlingMiddleware
             InvalidOperationException => (HttpStatusCode.Conflict, exception.Message),
             KeyNotFoundException => (HttpStatusCode.NotFound, AppConstants.ErrorMessages.NotFound),
             ArgumentException => (HttpStatusCode.BadRequest, exception.Message),
+            DbUpdateException dbEx => HandleDbUpdateException(dbEx),
             _ => (HttpStatusCode.InternalServerError, AppConstants.ErrorMessages.InternalError)
         };
 
@@ -51,5 +54,21 @@ public class ExceptionHandlingMiddleware
         };
 
         await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+    }
+
+    private (HttpStatusCode, string) HandleDbUpdateException(DbUpdateException dbEx)
+    {
+        if (dbEx.InnerException is PostgresException pgEx)
+        {
+            return pgEx.SqlState switch
+            {
+                "23505" => (HttpStatusCode.Conflict, "A record with this value already exists"),
+                "23503" => (HttpStatusCode.Conflict, AppConstants.ErrorMessages.CannotDeleteHasRelations),
+                "23502" => (HttpStatusCode.BadRequest, "Required field is missing"),
+                _ => (HttpStatusCode.InternalServerError, AppConstants.ErrorMessages.InternalError)
+            };
+        }
+
+        return (HttpStatusCode.InternalServerError, AppConstants.ErrorMessages.InternalError);
     }
 }

@@ -70,6 +70,10 @@ public class LocationService : ILocationService
 
     public async Task<LocationDto> CreateAsync(LocationDto dto)
     {
+        var exists = await _context.LocationsRepository.AnyAsync(l => l.LocationCode == dto.LocationCode);
+        if (exists)
+            throw new InvalidOperationException($"Location with code '{dto.LocationCode}' already exists");
+
         var location = new Location
         {
             Id = Guid.NewGuid(),
@@ -93,6 +97,10 @@ public class LocationService : ILocationService
         if (location == null)
             return null;
 
+        var exists = await _context.LocationsRepository.AnyAsync(l => l.LocationCode == dto.LocationCode && l.Id != id);
+        if (exists)
+            throw new InvalidOperationException($"Location with code '{dto.LocationCode}' already exists");
+
         location.LocationCode = dto.LocationCode;
         location.LocationName = dto.LocationName;
         location.LocationType = dto.LocationType;
@@ -110,6 +118,14 @@ public class LocationService : ILocationService
         var location = await _context.LocationsRepository.FindAsync(id);
         if (location == null)
             return false;
+
+        var hasStocks = await _context.InventoryStocksRepository.AnyAsync(i => i.LocationId == id);
+        if (hasStocks)
+            throw new InvalidOperationException("Cannot delete location with existing inventory stocks");
+
+        var hasPurchaseOrders = await _context.PurchaseOrdersRepository.AnyAsync(p => p.LocationId == id);
+        if (hasPurchaseOrders)
+            throw new InvalidOperationException("Cannot delete location with existing purchase orders");
 
         _context.LocationsRepository.Remove(location);
         await _context.SaveChangesAsync();
