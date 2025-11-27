@@ -99,48 +99,79 @@ public class PurchaseOrderService : IPurchaseOrderService
 
     public async Task<PurchaseOrderDto> CreateAsync(PurchaseOrderDto dto, string requestedBy)
     {
-        var orderNumber = GenerateOrderNumber();
+        var locationExists = await _context.LocationsRepository.AnyAsync(l => l.Id == dto.LocationId);
+        if (!locationExists)
+            throw new ArgumentException($"Location with ID '{dto.LocationId}' not found");
 
-        var order = new PurchaseOrder
+        if (dto.Items == null || !dto.Items.Any())
+            throw new ArgumentException("Purchase order must contain at least one item");
+
+        foreach (var item in dto.Items)
         {
-            Id = Guid.NewGuid(),
-            OrderNumber = orderNumber,
-            RequestedBy = requestedBy,
-            Department = dto.Department,
-            LocationId = dto.LocationId,
-            Status = "Pending"
-        };
+            var lastNameExists = await _context.LastNamesRepository.AnyAsync(l => l.Id == item.LastNameId);
+            if (!lastNameExists)
+                throw new ArgumentException($"LastName with ID '{item.LastNameId}' not found");
 
-        _context.PurchaseOrdersRepository.Add(order);
+            var lastSizeExists = await _context.LastSizesRepository.AnyAsync(s => s.Id == item.LastSizeId);
+            if (!lastSizeExists)
+                throw new ArgumentException($"LastSize with ID '{item.LastSizeId}' not found");
 
-        foreach (var itemDto in dto.Items)
-        {
-            var item = new PurchaseOrderItem
-            {
-                Id = Guid.NewGuid(),
-                PurchaseOrderId = order.Id,
-                LastNameId = itemDto.LastNameId,
-                LastSizeId = itemDto.LastSizeId,
-                QuantityRequested = itemDto.QuantityRequested
-            };
-            _context.PurchaseOrderItemsRepository.Add(item);
+            if (item.QuantityRequested <= 0)
+                throw new ArgumentException("Quantity must be greater than zero");
         }
 
-        await _context.SaveChangesAsync();
-
-        var location = await _context.LocationsRepository.FindAsync(dto.LocationId);
-        return new PurchaseOrderDto
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            Id = order.Id,
-            OrderNumber = order.OrderNumber,
-            RequestedBy = order.RequestedBy,
-            Department = order.Department,
-            LocationId = order.LocationId,
-            Status = order.Status,
-            LocationName = location?.LocationName,
-            CreatedAt = order.CreatedAt,
-            Items = dto.Items
-        };
+            var orderNumber = GenerateOrderNumber();
+
+            var order = new PurchaseOrder
+            {
+                Id = Guid.NewGuid(),
+                OrderNumber = orderNumber,
+                RequestedBy = requestedBy,
+                Department = dto.Department,
+                LocationId = dto.LocationId,
+                Status = "Pending"
+            };
+
+            _context.PurchaseOrdersRepository.Add(order);
+
+            foreach (var itemDto in dto.Items)
+            {
+                var item = new PurchaseOrderItem
+                {
+                    Id = Guid.NewGuid(),
+                    PurchaseOrderId = order.Id,
+                    LastNameId = itemDto.LastNameId,
+                    LastSizeId = itemDto.LastSizeId,
+                    QuantityRequested = itemDto.QuantityRequested
+                };
+                _context.PurchaseOrderItemsRepository.Add(item);
+            }
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            var location = await _context.LocationsRepository.FindAsync(dto.LocationId);
+            return new PurchaseOrderDto
+            {
+                Id = order.Id,
+                OrderNumber = order.OrderNumber,
+                RequestedBy = order.RequestedBy,
+                Department = order.Department,
+                LocationId = order.LocationId,
+                Status = order.Status,
+                LocationName = location?.LocationName,
+                CreatedAt = order.CreatedAt,
+                Items = dto.Items
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<bool> ConfirmOrderAsync(Guid id, string reviewedBy)
@@ -152,8 +183,11 @@ public class PurchaseOrderService : IPurchaseOrderService
                 .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
 
-            if (order == null || order.Status != "Pending")
+            if (order == null)
                 return false;
+
+            if (order.Status != "Pending")
+                throw new InvalidOperationException($"Cannot confirm order with status '{order.Status}'");
 
             order.Status = "Confirmed";
             order.ReviewedBy = reviewedBy;
@@ -211,8 +245,14 @@ public class PurchaseOrderService : IPurchaseOrderService
     public async Task<bool> DenyOrderAsync(Guid id, string reviewedBy, string reason)
     {
         var order = await _context.PurchaseOrdersRepository.FindAsync(id);
-        if (order == null || order.Status != "Pending")
+        if (order == null)
             return false;
+
+        if (order.Status != "Pending")
+            throw new InvalidOperationException($"Cannot deny order with status '{order.Status}'");
+
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Deny reason is required");
 
         order.Status = "Denied";
         order.ReviewedBy = reviewedBy;
