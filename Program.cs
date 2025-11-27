@@ -18,6 +18,19 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
+        // CORS Configuration
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("AllowFrontend", policy =>
+            {
+                policy.WithOrigins("http://localhost:3000") // Development - Next.js
+                                                            // TODO: Add production origins: .WithOrigins("https://yourdomain.com")
+                      .AllowAnyMethod() // GET, POST, PUT, DELETE
+                      .AllowAnyHeader() // Including Authorization for JWT Bearer token
+                      .AllowCredentials(); // For future cookies support if needed
+            });
+        });
+
         builder.Services.AddDatabase(builder.Configuration);
         builder.Services.AddJwtAuth(builder.Configuration);
         builder.Services.AddApplicationServices();
@@ -30,6 +43,7 @@ public class Program
             app.UseSwaggerUI();
         }
 
+        app.UseCors("AllowFrontend");
         app.UseHttpsRedirection();
         app.UseAuthentication();
         app.UseAuthorization();
@@ -38,4 +52,3 @@ public class Program
         app.Run();
     }
 }
-
