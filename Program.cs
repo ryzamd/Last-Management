@@ -24,11 +24,11 @@ public class Program
         {
             options.AddPolicy("AllowFrontend", policy =>
             {
-                policy.WithOrigins("http://localhost:3000") // Development - Next.js
-                                                            // TODO: Add production origins: .WithOrigins("https://yourdomain.com")
-                      .AllowAnyMethod() // GET, POST, PUT, DELETE
-                      .AllowAnyHeader() // Including Authorization for JWT Bearer token
-                      .AllowCredentials(); // For future cookies support if needed
+                policy.WithOrigins("http://localhost:3000")
+                      .AllowAnyMethod()
+                      .AllowAnyHeader()
+                      .AllowCredentials()
+                      .WithExposedHeaders("Authorization"); ;
             });
         });
 
@@ -40,13 +40,14 @@ public class Program
 
         app.UseMiddleware<ExceptionHandlingMiddleware>();
 
+        app.UseCors("AllowFrontend");
+
         if (app.Environment.IsDevelopment())
         {
             app.UseSwagger();
             app.UseSwaggerUI();
         }
 
-        app.UseCors("AllowFrontend");
         app.UseHttpsRedirection();
         app.UseAuthentication();
         app.UseAuthorization();

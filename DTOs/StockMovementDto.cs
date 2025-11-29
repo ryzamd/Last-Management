@@ -31,4 +31,8 @@ public class StockMovementDto
 
     public string? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
+    public string? LastCode { get; set; }
+    public string? SizeLabel { get; set; }
+    public string? FromLocationName { get; set; }
+    public string? ToLocationName { get; set; }
 }

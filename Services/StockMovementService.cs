@@ -46,7 +46,11 @@ public class StockMovementService : IStockMovementService
                 Reason = m.Reason,
                 ReferenceNumber = m.ReferenceNumber,
                 CreatedBy = m.CreatedBy,
-                CreatedAt = m.CreatedAt
+                CreatedAt = m.CreatedAt,
+                LastCode = m.LastName.LastCode,
+                SizeLabel = m.LastSize.SizeLabel,
+                FromLocationName = m.FromLocation != null ? m.FromLocation.LocationName : null,
+                ToLocationName = m.ToLocation != null ? m.ToLocation.LocationName : null
             })
             .ToListAsync();
 
@@ -83,7 +87,11 @@ public class StockMovementService : IStockMovementService
             Reason = movement.Reason,
             ReferenceNumber = movement.ReferenceNumber,
             CreatedBy = movement.CreatedBy,
-            CreatedAt = movement.CreatedAt
+            CreatedAt = movement.CreatedAt,
+            LastCode = movement.LastName.LastCode,
+            SizeLabel = movement.LastSize.SizeLabel,
+            FromLocationName = movement.FromLocation?.LocationName,
+            ToLocationName = movement.ToLocation?.LocationName
         };
     }
 }
